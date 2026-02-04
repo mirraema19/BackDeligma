@@ -5,20 +5,19 @@ class Convocatoria {
   static async getAll(soloActivas = false, ocultarVencidas = false) {
     try {
       let query = 'SELECT * FROM convocatorias WHERE 1=1';
-      const params = [];
 
       if (soloActivas) {
         query += ' AND activo = true';
       }
 
       if (ocultarVencidas) {
-        query += ' AND (fecha_fin IS NULL OR fecha_fin >= CURDATE() OR ocultar_vencida = false)';
+        query += ' AND (fecha_fin IS NULL OR fecha_fin >= CURRENT_DATE OR ocultar_vencida = false)';
       }
 
       query += ' ORDER BY fecha_inicio DESC, fecha_creacion DESC';
 
-      const [rows] = await pool.query(query, params);
-      return rows;
+      const result = await pool.query(query);
+      return result.rows;
     } catch (error) {
       throw error;
     }
@@ -32,8 +31,8 @@ class Convocatoria {
   // Obtener convocatoria por ID
   static async getById(id) {
     try {
-      const [rows] = await pool.query('SELECT * FROM convocatorias WHERE id = ?', [id]);
-      return rows[0];
+      const result = await pool.query('SELECT * FROM convocatorias WHERE id = $1', [id]);
+      return result.rows[0];
     } catch (error) {
       throw error;
     }
@@ -54,13 +53,13 @@ class Convocatoria {
         ocultar_vencida = true
       } = data;
 
-      const [result] = await pool.query(
+      const result = await pool.query(
         `INSERT INTO convocatorias (titulo, emoji, descripcion, sede, fecha_inicio, fecha_fin, enlace_inscripcion, activo, ocultar_vencida)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
         [titulo, emoji, descripcion, sede, fecha_inicio, fecha_fin, enlace_inscripcion, activo, ocultar_vencida]
       );
 
-      return this.getById(result.insertId);
+      return this.getById(result.rows[0].id);
     } catch (error) {
       throw error;
     }
@@ -84,41 +83,42 @@ class Convocatoria {
       // Construir query dinámicamente
       const updates = [];
       const values = [];
+      let paramIndex = 1;
 
       if (titulo !== undefined) {
-        updates.push('titulo = ?');
+        updates.push(`titulo = $${paramIndex++}`);
         values.push(titulo);
       }
       if (emoji !== undefined) {
-        updates.push('emoji = ?');
+        updates.push(`emoji = $${paramIndex++}`);
         values.push(emoji);
       }
       if (descripcion !== undefined) {
-        updates.push('descripcion = ?');
+        updates.push(`descripcion = $${paramIndex++}`);
         values.push(descripcion);
       }
       if (sede !== undefined) {
-        updates.push('sede = ?');
+        updates.push(`sede = $${paramIndex++}`);
         values.push(sede);
       }
       if (fecha_inicio !== undefined) {
-        updates.push('fecha_inicio = ?');
+        updates.push(`fecha_inicio = $${paramIndex++}`);
         values.push(fecha_inicio);
       }
       if (fecha_fin !== undefined) {
-        updates.push('fecha_fin = ?');
+        updates.push(`fecha_fin = $${paramIndex++}`);
         values.push(fecha_fin);
       }
       if (enlace_inscripcion !== undefined) {
-        updates.push('enlace_inscripcion = ?');
+        updates.push(`enlace_inscripcion = $${paramIndex++}`);
         values.push(enlace_inscripcion);
       }
       if (activo !== undefined) {
-        updates.push('activo = ?');
+        updates.push(`activo = $${paramIndex++}`);
         values.push(activo);
       }
       if (ocultar_vencida !== undefined) {
-        updates.push('ocultar_vencida = ?');
+        updates.push(`ocultar_vencida = $${paramIndex++}`);
         values.push(ocultar_vencida);
       }
 
@@ -128,12 +128,12 @@ class Convocatoria {
 
       values.push(id);
 
-      const [result] = await pool.query(
-        `UPDATE convocatorias SET ${updates.join(', ')} WHERE id = ?`,
+      const result = await pool.query(
+        `UPDATE convocatorias SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
         values
       );
 
-      if (result.affectedRows === 0) {
+      if (result.rowCount === 0) {
         throw new Error('Convocatoria no encontrada');
       }
 
@@ -146,9 +146,9 @@ class Convocatoria {
   // Eliminar convocatoria
   static async delete(id) {
     try {
-      const [result] = await pool.query('DELETE FROM convocatorias WHERE id = ?', [id]);
+      const result = await pool.query('DELETE FROM convocatorias WHERE id = $1', [id]);
 
-      if (result.affectedRows === 0) {
+      if (result.rowCount === 0) {
         throw new Error('Convocatoria no encontrada');
       }
 
@@ -169,7 +169,7 @@ class Convocatoria {
 
       const nuevoEstado = !convocatoria.activo;
 
-      await pool.query('UPDATE convocatorias SET activo = ? WHERE id = ?', [nuevoEstado, id]);
+      await pool.query('UPDATE convocatorias SET activo = $1 WHERE id = $2', [nuevoEstado, id]);
 
       return this.getById(id);
     } catch (error) {
